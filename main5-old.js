@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 // Create the scene
 const scene = new THREE.Scene();
@@ -12,14 +11,6 @@ camera.position.z = 0; // Set camera position
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
-
-// Create the OrbitControls
-const controls = new OrbitControls(camera, renderer.domElement);
-controls.enableDamping = true; // Enable damping (inertia)
-controls.dampingFactor = 0.25; // Damping factor
-controls.screenSpacePanning = false; // Do not allow panning
-controls.minDistance = 1; // Minimum zoom distance
-controls.maxDistance = 10; // Maximum zoom distance
 
 // Create the geometry for all tori
 const geometry = new THREE.TorusGeometry(0.5, 0.1, 16, 48);
