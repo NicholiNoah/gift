@@ -1,8 +1,17 @@
 {
-  "dependencies": {
-    "three": "^0.156.1"
-  },
-  "devDependencies": {
-    "vite": "^4.4.9"
+	"name": "gift",
+	"version": "1.0.0",
+	"scripts": {
+	  "dev": "vite",
+	  "build": "vite build",
+	  "deploy": "gh-pages -d dist"
+	},
+	"dependencies": {
+	  "three": "^0.160.0",
+	  "mindar-image-three": "^1.2.5"
+	},
+	"devDependencies": {
+	  "vite": "^4.0.0",
+	  "gh-pages": "^3.2.3"
+	}
   }
-}
