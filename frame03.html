@@ -1,0 +1,212 @@
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <script async src="https://unpkg.com/es-module-shims@1.8.0/dist/es-module-shims.js"></script>
+    <script type="module" src="./main5-old.js"></script>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+          "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+          "mindar-image-three":"https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js"
+        }
+      }
+    </script>
+
+    <script type="module">
+
+      import * as THREE from 'three';
+      import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+      import { MindARThree } from 'mindar-image-three';
+
+      document.addEventListener('DOMContentLoaded', () => {
+        const start = async () => {
+          // initialize MindAR
+          const mindarThree = new MindARThree({
+            container: document.body,
+            imageTargetSrc: './assets/textures/unfoldingQR.mind',
+          });
+          const { renderer, scene, camera } = mindarThree;
+
+          // preload images
+          const imagesTotal = 16;
+          const imageNum = Array.from({ length: imagesTotal }, (value, index) => index.toString());
+
+          const textureLoader = new THREE.TextureLoader();
+          const textures = [];
+
+          for (let i = 0; i < imageNum.length; i++) {
+            const texture = textureLoader.load(`./assets/textures/image${imageNum[i]}.jpg`);
+            textures.push(texture);
+          }
+
+          // create AR object
+          const geometry = new THREE.SphereGeometry(0.95, 32);
+          const material = new THREE.MeshBasicMaterial({ map: textures[0], transparent: true, opacity: 0 });
+          const plane = new THREE.Mesh(geometry, material);
+
+          const geoCircle = new THREE.SphereGeometry(1, 32);
+          const matCircle = new THREE.MeshBasicMaterial({
+            map: textures[0],
+            transparent: false,
+            opacity: 1,
+            side: THREE.BackSide
+          });
+          const circle = new THREE.Mesh(geoCircle, matCircle);
+          circle.rotation.y -= THREE.MathUtils.degToRad(270);
+
+          // create anchor
+          const anchor = mindarThree.addAnchor(0);
+          anchor.group.add(plane);
+          anchor.group.add(circle);
+
+          // GLTFLoader to load the frame model
+          const loader = new GLTFLoader();
+
+          // Create an array to hold frames and their properties
+          const frames = [];
+          const colors = [0x00ff00, 0xff0000, 0x0000ff, 0xff00ff];
+          const initialZ = camera.position.z - 0; // Start at the camera position
+          const totalDistance = 5.5; // Total distance for the loop
+          const speed = 0.15; // units per second
+          const numFrames = colors.length;
+          const interval = (totalDistance / numFrames) / speed * 1000; // Interval in milliseconds
+          const loopDuration = totalDistance / speed; // Total duration for one loop
+          const dissolveDuration = 45; // Duration of the dissolve effect in seconds
+
+          // Variable for velocity
+          const velocity = 0.5; // Adjust as needed
+
+          // Function to create and add a frame to the anchor group
+          function createFrame(color, delay) {
+            loader.load('frame.gltf', (gltf) => {
+              console.log('Model loaded', gltf); // Log model load
+              const frame = gltf.scene;
+              frame.position.set(0, 0, initialZ); // Set initial position along z-axis
+              frame.scale.set(1, 1, 1); // Initial scale
+
+              // Assign moderate random rotation speeds (including negative values)
+              frame.rotationSpeedX = (Math.random() - 0.5) * 0.0001;
+              frame.rotationSpeedY = (Math.random() - 0.5) * 0.0001;
+
+              frames.push({ frame, delay });
+            }, undefined, (error) => {
+              console.error('An error occurred loading the model', error);
+            });
+          }
+
+          // Create frames with different colors and equal delays
+          colors.forEach((color, index) => {
+            createFrame(color, index * interval);
+          });
+
+          // Add frames to the anchor group at the correct time
+          function addFramesToScene(currentTime) {
+            frames.forEach(({ frame, delay }) => {
+              if (currentTime >= delay && !frame.added) {
+                anchor.group.add(frame);
+                frame.added = true;
+                frame.startTime = delay;
+              }
+            });
+          }
+
+          // Animation function
+          function animate(currentTime) {
+            // Calculate delta time
+            const delta = (currentTime - lastTime) / 1000; // Convert to seconds
+            lastTime = currentTime;
+
+            // Add frames to the anchor group
+            addFramesToScene(currentTime);
+
+            // Animate all frames
+            frames.forEach(({ frame, delay }) => {
+              if (frame.added) {
+                const elapsed = (currentTime - delay) / 1000; // Convert to seconds
+                const cycleTime = elapsed % loopDuration; // Time elapsed in one loop cycle
+
+                // Calculate z position based on time and velocity
+                const z = initialZ - (cycleTime / loopDuration) * totalDistance * velocity;
+                frame.position.z = z;
+
+                // Calculate opacity based on position in the loop
+                if (cycleTime >= loopDuration - dissolveDuration) {
+                  frame.traverse((child) => {
+                    if (child.isMesh) {
+                      child.material.transparent = true;
+                      child.material.opacity = 1 - (cycleTime - (loopDuration - dissolveDuration)) / dissolveDuration;
+                    }
+                  });
+                } else {
+                  frame.traverse((child) => {
+                    if (child.isMesh) {
+                      child.material.transparent = true;
+                      child.material.opacity = 1;
+                    }
+                  });
+                }
+
+                // Calculate scale based on position in the loop
+                const scale = 1 - (cycleTime / loopDuration / 2.5);
+                frame.scale.set(scale, scale, scale);
+
+                // Apply rotation
+                frame.rotation.x += frame.rotationSpeedX;
+                frame.rotation.y += frame.rotationSpeedY;
+
+                // Reset scale when repositioning
+                if (z <= initialZ - totalDistance) {
+                  frame.scale.set(1, 1, 1);
+                }
+              }
+            });
+
+            // Render the scene
+            renderer.render(scene, camera);
+
+            // Request the next frame
+            requestAnimationFrame(animate);
+          }
+
+          // Initialize lastTime
+          let lastTime = performance.now();
+
+          // Start the animation loop
+          animate(lastTime);
+
+          // start AR
+          await mindarThree.start();
+          renderer.setAnimationLoop(() => {
+            plane.lookAt(new THREE.Vector3());
+            const axisY = plane.rotation.y;
+
+            const stepSize = 0.025; // size of each step between -0.3 and 0.3
+            const numSteps = 16; // number of steps between -0.3 and 0.3
+
+            // distribute and change images according to axisY rotation
+            if (axisY <= -0.3) {
+              circle.material.map = textures[0];
+            } else if (axisY > 0.3) {
+              circle.material.map = textures[15];
+            } else {
+              const index = Math.floor((axisY + 0.3) / stepSize);
+              circle.material.map = textures[index];
+            }
+
+            renderer.render(scene, camera);
+          });
+        }
+        start();
+      });
+    </script>
+
+    <style>
+      html, body {position: relative; margin: 0; width: 100%; height: 100%; overflow: hidden}
+    </style>
+  </head>
+  <body>
+  </body>
+</html>
